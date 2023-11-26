@@ -7,4 +7,6 @@ public interface UserService {
 
     AuthResponse addUser(AuthRequest request);
 
+    AuthResponse login(AuthRequest authRequest);
+
 }

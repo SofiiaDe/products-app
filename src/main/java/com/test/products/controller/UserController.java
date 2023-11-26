@@ -5,6 +5,7 @@ import com.test.products.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,5 +27,15 @@ public class UserController extends BaseController {
         }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(userService.addUser(request));
+    }
+
+    @PostMapping(value = "/authenticate", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> login(@Valid @RequestBody AuthRequest request,
+                                   BindingResult result) {
+        if (result.hasErrors()) {
+            return handleValidationErrors(result);
+        }
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(userService.login(request));
     }
 }
