@@ -25,4 +25,11 @@ public class ProductController extends BaseController {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(productService.addProducts(request));
     }
+
+    @GetMapping("/all")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ResponseEntity<?> getAllProducts() {
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(productService.getAllProducts());
+    }
 }

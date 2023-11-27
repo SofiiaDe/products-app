@@ -1,13 +1,18 @@
 package com.test.products.repository;
 
 import com.test.products.exception.DBException;
+import com.test.products.model.Product;
+import com.test.products.model.entity.Table;
 import com.test.products.model.payload.AddProductsRequest;
+import com.test.products.model.payload.ProductsResponse;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,7 +24,7 @@ import java.util.stream.IntStream;
 public class ProductDaoImpl implements ProductDao {
 
     private static final String PRODUCTS_WITH_DIFFERENT_COLUMN_KEYS = "Products have different keys and can not be persisted to the table";
-
+    private static final String SELECT_FROM = "SELECT * FROM ";
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -34,6 +39,24 @@ public class ProductDaoImpl implements ProductDao {
         return insertProducts(request);
     }
 
+    @Override
+    public ProductsResponse getAllProducts() {
+
+        Map<String, List<? extends Product>> products = new HashMap<>();
+
+        Query getTableNamesQuery = entityManager.createNativeQuery(SELECT_FROM + "tables", Table.class);
+        List<Table> tables = (List<Table>) getTableNamesQuery.getResultList();
+
+        for (Table table : tables) {
+            Query getProductsQuery = entityManager.createNativeQuery(SELECT_FROM + table.getName(), Product.class);
+            List<Product> tableProducts = (List<Product>) getProductsQuery.getResultList();
+            products.put(table.getName(), tableProducts);
+        }
+        return ProductsResponse.builder()
+                .productsTables(products)
+                .build();
+    }
+
     private void createTable(AddProductsRequest request) {
         StringBuilder createTableQuery = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
         createTableQuery.append(request.getTable());
@@ -44,6 +67,15 @@ public class ProductDaoImpl implements ProductDao {
         }
         createTableQuery.append(")");
         entityManager.createNativeQuery(createTableQuery.toString()).executeUpdate();
+
+        saveTableName(request.getTable());
+    }
+
+    private void saveTableName(String tableName) {
+        StringBuilder saveTableNameQuery = new StringBuilder("INSERT INTO tables (name) VALUES ('");
+        saveTableNameQuery.append(tableName);
+        saveTableNameQuery.append("')");
+        entityManager.createNativeQuery(saveTableNameQuery.toString()).executeUpdate();
     }
 
     private int insertProducts(AddProductsRequest request) {
