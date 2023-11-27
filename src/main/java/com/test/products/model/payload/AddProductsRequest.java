@@ -15,6 +15,5 @@ import java.util.Map;
 public class AddProductsRequest {
 
     private String table;
-    // validate equal keys in each entity
-    private List<Map<String, Object>> records;
+    private List<Map<String, String>> records;
 }

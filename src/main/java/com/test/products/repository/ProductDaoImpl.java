@@ -1,70 +1,97 @@
 package com.test.products.repository;
 
-import com.test.products.model.payload.AddProductsResponse;
+import com.test.products.exception.DBException;
+import com.test.products.model.payload.AddProductsRequest;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Query;
-import jakarta.transaction.Transactional;
+import jakarta.persistence.PersistenceContext;
+import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.hibernate.Session;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.function.Function;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.IntStream;
 
 @Log4j2
+@AllArgsConstructor
+@Component
 public class ProductDaoImpl implements ProductDao {
 
-    private final EntityManagerFactory entityManagerFactory;
-    private final TransactionTemplate transactionTemplate;
+    private static final String PRODUCTS_WITH_DIFFERENT_COLUMN_KEYS = "Products have different keys and can not be persisted to the table";
 
-    public ProductDaoImpl(EntityManagerFactory entityManagerFactory, PlatformTransactionManager transactionManager) {
-        this.entityManagerFactory = entityManagerFactory;
-        this.transactionTemplate = new TransactionTemplate(transactionManager);
-    }
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Override
-    @Transactional
-    public AddProductsResponse saveProducts(String tableName, String columnsDefinition, String columnsNames, String values) {
-        return execute(e -> {
-            Query query = e.createNativeQuery(
-                    "CREATE TABLE IF NOT EXISTS :tableName (id BIGINT AUTO_INCREMENT PRIMARY KEY :columnsDefinition);");
-            query.setParameter("tableName", tableName);
-            query.setParameter("columnsDefinition", columnsDefinition);
-            query.executeUpdate();
+    public int saveProducts(AddProductsRequest request) {
 
-            Query nativeQuery = e.createNativeQuery("INSERT INTO :tableName (:columnsNames) VALUES (:values)");
-            nativeQuery.setParameter("tableName", tableName);
-            nativeQuery.setParameter("columnsNames", columnsNames);
-            nativeQuery.setParameter("values", values);
-//            Session session = entityManager.unwrap(HibernateEntityManager.class).getSession();
-//            org.hibernate.Query nativeQuery = session.createNativeQuery("SELECT * FROM _tmp_siteoutage_summary");
-            List resultList = nativeQuery.getResultList();
-
-            return AddProductsResponse.builder()
-                    .tableName(tableName)
-                    .productsCount(resultList.size())
-                    .build();
-        });
+        if (!validateProductRecordsHaveEqualKeys(request.getRecords())) {
+            log.error(PRODUCTS_WITH_DIFFERENT_COLUMN_KEYS);
+            throw new DBException(PRODUCTS_WITH_DIFFERENT_COLUMN_KEYS);
+        }
+        createTable(request);
+        return insertProducts(request);
     }
 
-    private <R> R execute(Function<EntityManager, R> function) {
-        EntityManager entityManager = null;
-        try {
-            entityManager = entityManagerFactory.createEntityManager();
-            return function.apply(entityManager);
-        } finally {
-            try {
-                if (entityManager != null) {
-                    entityManager.close();
-                }
+    private void createTable(AddProductsRequest request) {
+        StringBuilder createTableQuery = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
+        createTableQuery.append(request.getTable());
+        createTableQuery.append(" (id INT AUTO_INCREMENT PRIMARY KEY");
 
-            } catch (Exception e) {
-                log.warn("Error closing entity manager", e);
+        for (String key : getColumnNames(request)) {
+            createTableQuery.append(", ").append(key).append(" VARCHAR(255)");
+        }
+        createTableQuery.append(")");
+        entityManager.createNativeQuery(createTableQuery.toString()).executeUpdate();
+    }
+
+    private int insertProducts(AddProductsRequest request) {
+        StringBuilder insertProductsQuery = new StringBuilder("INSERT INTO ");
+        insertProductsQuery.append(request.getTable());
+        insertProductsQuery.append(" (");
+        addColumnsForInsertQuery(insertProductsQuery, getColumnNames(request));
+        insertProductsQuery.append(") VALUES (");
+        return executeInsertProducts(insertProductsQuery.toString(), request.getRecords());
+    }
+
+
+    private void addColumnsForInsertQuery(StringBuilder insertProductsQuery, Set<String> columnNames) {
+        int i = 0;
+        for (String key : columnNames) {
+            if (i != 0) {
+                insertProductsQuery.append(", ");
             }
+            insertProductsQuery.append(key);
+            i++;
         }
     }
 
+    private Set<String> getColumnNames(AddProductsRequest request) {
+        return request.getRecords().get(0).keySet();
+    }
+
+    private int executeInsertProducts(String insertProductsQuery, List<Map<String, String>> records) {
+        int result = 0;
+        for (Map<String, String> productRecord : records) {
+            StringBuilder insertProductValuesQuery = new StringBuilder(insertProductsQuery);
+            int i = 0;
+            for (String value : productRecord.values()) {
+                if (i != 0) {
+                    insertProductValuesQuery.append(", ");
+                }
+                insertProductValuesQuery.append("'").append(value).append("'");
+                i++;
+            }
+            insertProductValuesQuery.append(")");
+            result += entityManager.createNativeQuery(insertProductValuesQuery.toString()).executeUpdate();
+        }
+        return result;
+    }
+
+    private boolean validateProductRecordsHaveEqualKeys(List<Map<String, String>> records) {
+        return IntStream.range(0, records.size())
+                .allMatch(i -> IntStream.range(i + 1, records.size())
+                        .allMatch(j -> records.get(i).keySet().equals(records.get(j).keySet())));
+    }
 }

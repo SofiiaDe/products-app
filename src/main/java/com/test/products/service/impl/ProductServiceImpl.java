@@ -2,64 +2,33 @@ package com.test.products.service.impl;
 
 import com.test.products.exception.DBException;
 import com.test.products.model.payload.AddProductsRequest;
-import com.test.products.model.payload.AddProductsResponse;
 import com.test.products.repository.ProductDao;
 import com.test.products.service.ProductService;
 import lombok.AllArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Log4j2
 @Service
 @AllArgsConstructor
 public class ProductServiceImpl implements ProductService {
+
+    private static final String CAN_NOT_SAVE_PRODUCTS = "Can't save products";
 
     private ProductDao productDao;
 
     @Override
     @Transactional
-    public AddProductsResponse addProducts(AddProductsRequest request) {
-        AddProductsResponse response;
+    public int addProducts(AddProductsRequest request) {
+        int savedRecordsCount;
         try {
-            response = productDao.saveProducts(request.getTable(), getColumnsDefinitionAsString(request),
-                    getColumnsNamesAsString(request), getProductValues(request));
+            savedRecordsCount = productDao.saveProducts(request);
         } catch (DBException exception) {
-            throw new DBException("Can't save products");
+            log.error(CAN_NOT_SAVE_PRODUCTS);
+            throw new DBException(CAN_NOT_SAVE_PRODUCTS);
         }
-        return response;
-    }
-
-    private String getColumnsDefinitionAsString(AddProductsRequest request) {
-        StringBuilder columns = new StringBuilder();
-        for (String key : request.getRecords().get(0).keySet()) {
-            columns
-                    .append(", ")
-                    .append(key)
-                    .append(" VARCHAR(255)"); // differentiate db type
-        }
-        columns.append(")");
-        return columns.toString();
-    }
-
-    private String getColumnsNamesAsString(AddProductsRequest request) {
-        StringBuilder columns = new StringBuilder();
-        for (String key : request.getRecords().get(0).keySet()) {
-            columns
-                    .append(", ")
-                    .append(key);
-        }
-        columns.append(")");
-        return columns.toString();
-    }
-
-    private String getProductValues(AddProductsRequest request) {
-        StringBuilder columns = new StringBuilder();
-        for (Object value : request.getRecords().get(0).values()) {
-            columns
-                    .append(", ")
-                    .append(value);
-        }
-        columns.append(")");
-        return columns.toString();
+        return savedRecordsCount;
     }
 
 }

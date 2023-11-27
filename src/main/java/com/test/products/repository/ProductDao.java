@@ -1,8 +1,8 @@
 package com.test.products.repository;
 
-import com.test.products.model.payload.AddProductsResponse;
+import com.test.products.model.payload.AddProductsRequest;
 
 public interface ProductDao {
 
-    AddProductsResponse saveProducts(String tableName, String columnsDefinition, String columnsNames, String values);
+    int saveProducts(AddProductsRequest request);
 }
